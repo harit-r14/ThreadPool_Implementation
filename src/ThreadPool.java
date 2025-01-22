@@ -13,9 +13,30 @@
     Simpler, fire-and-forget tasks	            ✅ Yes	❌ No
 */
 
+/*
+Next Plan :
+
+Accept the runnable or callable  through submit method ( require 2 submit method - overloading)
+
+will wrap this runnable or callable in FutureTask
+
+
+will push  FutureTask it in some queue (will follow FIFO)
+
+
+now thread will futuretask from the queue and will run().
+
+
+
+ */
+
+
+
 import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.Queue;
+import java.util.concurrent.Callable;
+import java.util.concurrent.Future;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -23,6 +44,13 @@ public class ThreadPool {
 
     // Submit
     // Shutdown
+//    Future<>
+//    Callable
+
+    //FutureTask.java
+
+
+
     Queue<Runnable> taskQueue = new LinkedList<>(); //shared variable
     ArrayList<Thread> threads = new ArrayList<>();
     Lock taskQueueLock = new ReentrantLock();
