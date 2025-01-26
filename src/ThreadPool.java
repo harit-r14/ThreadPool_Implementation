@@ -30,101 +30,111 @@ now thread will futuretask from the queue and will run().
 
  */
 
-
-
 import java.util.ArrayList;
 import java.util.LinkedList;
+import java.util.List;
 import java.util.Queue;
 import java.util.concurrent.Callable;
 import java.util.concurrent.Future;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantLock;
-
-public class ThreadPool {
-
-    // Submit
-    // Shutdown
-//    Future<>
-//    Callable
-
-    //FutureTask.java
+import java.util.concurrent.FutureTask;
 
 
+public class  ThreadPool {
 
-    Queue<Runnable> taskQueue = new LinkedList<>(); //shared variable
-    ArrayList<Thread> threads = new ArrayList<>();
-    Lock taskQueueLock = new ReentrantLock();
+    private final Queue<FutureTask<?>> taskQueue = new LinkedList<>();
+    private final List<Thread> threads = new ArrayList<>();
+    private final Object lock = new Object();
+    private boolean isShutdown = false;
+    private boolean isShutdownNow = false;
 
+    public ThreadPool(int sizeOfPool) {
+        for (int i = 0; i < sizeOfPool; i++) {
+            Thread thread = new Thread(() -> {
+                while (true) {
+                    FutureTask<?> taskToRun = null;
 
-    int sizeOfPool;
-    boolean isShutdown = false;
-
-    ThreadPool(int sizeOfPool){
-        this.sizeOfPool = sizeOfPool;
-
-        Runnable task = new Runnable() {
-            @Override
-            public void run() {
-                while(true)
-                {
-                    System.out.println(Thread.currentThread().getName() + " waiting for the lock");
-                    taskQueueLock.lock();
-                    System.out.println(Thread.currentThread().getName() + " acquired lock");
-                    if (taskQueue.isEmpty()) {  // If TaskQueue is empty then it will wait until new task is added and will call notify
-                        try {
-                            System.out.println(Thread.currentThread().getName() + " is waiting for task to run");
-                            wait();  // wait for new task
-                        } catch (InterruptedException e) {
-                            System.out.println(Thread.currentThread().getName() + " is interrupted");
+                    synchronized (lock) {
+                        while (taskQueue.isEmpty() && !(isShutdown || isShutdownNow)) { // need to use while to avoid spurious wakeups , so that it ̄ check again if it is really empty or not
+                            try {
+                                lock.wait();
+                            } catch (InterruptedException e) {
+                                Thread.currentThread().interrupt();
+                                return;
+                            }
                         }
-                    }
-                    else {
-                        System.out.println(Thread.currentThread().getName() + " has accepted the new task");
-                        Runnable newTask = taskQueue.poll();
 
-                        System.out.println(Thread.currentThread().getName() + " released lock");
-                        taskQueueLock.unlock(); // thread has accessed the taskQeueue so no need to keep lock while running the task. If it was released after .run() then other thread has to wait for the completion of task to get the new task. Which doesn't make sense.
-                        newTask.run();
+                        if (isShutdownNow) {
+                            System.out.println(Thread.currentThread().getName() + " is shutting down now");
+                            return;
+                        }
+
+                        if (isShutdown && taskQueue.isEmpty()) {
+                            System.out.println(Thread.currentThread().getName() + " is shutting down");
+                            return;
+                        }
+
+                        taskToRun = taskQueue.poll();
+                    }
+
+                    if (taskToRun != null) {
+                        taskToRun.run();
                     }
                 }
+            });
+            thread.start();
+            threads.add(thread);
+        }
+    }
+
+    public FutureTask<?> submit(Runnable task) {
+        if (isShutdown) {
+            throw new IllegalStateException("Thread pool is shutdown");
+        }
+        FutureTask<?> futureTask = new FutureTask<>(task, null);
+        synchronized (lock) {
+            taskQueue.add(futureTask);
+            lock.notify();
+        }
+        return futureTask;
+    }
+
+    public Future<?> submit(Callable<?> task) {
+        if (isShutdown) {
+            throw new IllegalStateException("Thread pool is shutdown");
+        }
+        FutureTask<?> futureTask = new FutureTask<>(task);
+
+        synchronized (lock) {
+            taskQueue.add(futureTask);
+            lock.notify();
+        }
+
+        return futureTask;
+    }
+
+    public void shutdown() {
+        synchronized (lock) {
+            isShutdown = true;
+            lock.notifyAll();
+        }
+    }
+
+    public List<Runnable> shutdownNow() {
+
+        isShutdownNow = true;
+        for (Thread thread : threads) {
+            thread.interrupt();
+        }
+
+        synchronized (lock) {
+            List<Runnable> remainingTask = new ArrayList<>();
+
+            while (!taskQueue.isEmpty()) {
+                remainingTask.add(() -> {
+                    taskQueue.poll().run();
+                });
             }
-        };
-
-        for(int i = 0 ; i < sizeOfPool ; i++)
-        {
-            threads.add(new Thread(task));
-            System.out.println("Thread " + i + " is created");
-        }
-
-        for(int i = 0 ; i < sizeOfPool ; i++)
-        {
-            threads.get(i).start();
+            return remainingTask;
         }
     }
-
-
-    public void submit(Runnable newTask)
-    {
-        if(isShutdown)
-        {
-            throw new RuntimeException("Thread pool is shutdown");
-        }
-        taskQueue.offer(newTask); //exception throw when queue is full (Note : implement remaining)
-        notify();
-    }
-
-    public void shutdown()
-    {
-        isShutdown = true;
-    }
-
-    public void shutdownNow()
-    {
-        isShutdown = true;
-        for(int i = 0 ; i < sizeOfPool ; i++)
-        {
-            threads.get(i).interrupt();
-        }
-    }
-
 }
