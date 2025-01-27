@@ -54,7 +54,7 @@ public class  ThreadPool {
                     FutureTask<?> taskToRun = null;
 
                     synchronized (lock) {
-                        while (taskQueue.isEmpty() && !(isShutdown || isShutdownNow)) { // need to use while to avoid spurious wakeups , so that it ̄ check again if it is really empty or not
+                        while (taskQueue.isEmpty() && !(isShutdown || isShutdownNow)) {
                             try {
                                 lock.wait();
                             } catch (InterruptedException e) {
